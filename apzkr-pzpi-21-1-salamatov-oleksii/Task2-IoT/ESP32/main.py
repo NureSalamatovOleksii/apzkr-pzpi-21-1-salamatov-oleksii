@@ -33,7 +33,6 @@ screen = oled_lib.SSD1306_I2C(width=128, height=64, i2c=pin_oled)
 jarak = sonic_lib.HCSR04(trigger_pin=trig, echo_pin=echo)
 
 # Global variables
-user_id = 0
 trash_type = 'plastic'
 collection_point_id = 0
 max_volume = 1000
@@ -82,6 +81,34 @@ def define_fullness(distance):
 def get_trash_volume(prev_distance, new_distance):
     trash_height = prev_distance - new_distance
     return max_volume * (trash_height / bin_height)
+
+# Possible qr-code proceeding
+def scan_qr_code():
+    return '{"user_id": "1", "bearer_token": "abc"}'
+
+# Function to process QR code data
+def process_qr_data():
+    qr_data = scan_qr_code()
+    
+    try:
+        data = json.loads(qr_data)
+    except ValueError:
+        print("Error: Unable to decode JSON")
+        return
+    
+    user_id = data.get("user_id")
+    bearer_token = data.get("bearer_token")
+
+    if not all([user_id, bearer_token]):
+        print("Error: Missing required data")
+        return
+
+    # Verify the token
+    if verify_token(bearer_token):
+        print("Successful authentication of user with ID:", user_id)
+        print("Bearer token:", bearer_token)
+    else:
+        print("Error: Invalid token")
 
 # Attempt to connect to Wi-Fi
 try:
@@ -138,12 +165,11 @@ while True:
             screen.show()
 
     if distance_in_cm >= 50 :
+        user_id = None
         if button1.value() == 0:
             screen.fill(1)
             print('Enter user id')
             user_id = input()
-            print('Enter trash type')
-            trash_type = input()
             green.value(0)
             red.value(1)
             while button2.value() == 1:
@@ -156,19 +182,33 @@ while True:
             green.value(1)
             weight = get_weight()
             print("Total Weight is:", weight)
-            data_to_send = {
-                "trashType": trash_type,
-                "weight": weight,
-                "volume": get_trash_volume(distance_in_cm, jarak.distance_cm()),
-                "userID": user_id,
-                "collectionPointID": collection_point_id
-            }
+            if 1 < 0:
+                # Create operation
+                data_to_send = {
+                    "trashType": trash_type,
+                    "weight": weight,
+                    "volume": get_trash_volume(distance_in_cm, jarak.distance_cm()),
+                    "userID": user_id,
+                    "collectionPointID": collection_point_id
+                }
 
-            # response = post_data_to_server(f'{server_url}api/Operation/CreateOperation', data_to_send)
-            # if response:
-            #     print("Response from server:", response)
-            # else:
-            #     print("Failed to post data")
+                response = post_data_to_server(f'{server_url}api/Operation/CreateOperation', data_to_send)
+                if response:
+                    print("Response from server:", response)
+                else:
+                    print("Failed to post data")
+
+                if user_id != None:
+                    # Get bonuses
+                    data = get_data_from_server(f'https://localhost:7051/api/UserStatistics/GetUserBonuses/{user_id}')
+                    if data is not None:
+                        print("Received data:", data)
+                        bonuses_amount = get_bonuses_amount(data)
+                        if bonuses_amount is not None:
+                            print("Amount of bonuses:", bonuses_amount)
+                    else:
+                        print("Failed to retrieve data")
+
             for a in range(10):
                 screen.fill(1)
                 screen.text(f'Weight: {weight:.2f} kg', 15, 40, 0)
